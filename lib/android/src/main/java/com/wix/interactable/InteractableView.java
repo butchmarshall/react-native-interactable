@@ -545,7 +545,7 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
 
 
     public interface InteractionListener {
-        void onSnap(int indexOfSnapPoint, String snapPointId);
+        void onSnap(int indexOfSnapPoint, String snapPointId, boolean programmatic);
         void onAlert(String alertAreaId, String alertType);
         void onAnimatedEvent(float x, float y);
         void onDrag(String state, float x, float y, String targetSnapPointId);
