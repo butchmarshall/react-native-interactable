@@ -145,7 +145,7 @@ public class PhysicsAnimator implements Choreographer.FrameCallback {
             PhysicsObject physicsObject = targetsToObjects.get(behavior.target);
             if (physicsObject != null) {
                 behavior.executeFrameWithDeltaTime(deltaTime,physicsObject);
-//                Log.d("InteractableView"," animateFrameWithDeltaTime doing behavior " + " vx = " + physicsObject.velocity.x);
+//                Log.d("InteractableView"," animateFrameWithDeltaTime doing behavior " + " vy = " + physicsObject.velocity.y);
             }
         }
 

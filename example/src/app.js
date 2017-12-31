@@ -23,6 +23,7 @@ import SnapTo from './SnapTo';
 import ChangePosition from './ChangePosition';
 import AlertAreas from './AlertAreas';
 import CollapsingHeaderWithScroll from './CollapsingHeaderWithScroll';
+import ViewWithInterceptionBlocker from './ViewWithInterceptionBlocker';
 
 export default class example extends Component {
   constructor(props) {
@@ -103,6 +104,9 @@ export default class example extends Component {
         </TouchableOpacity>
         <TouchableOpacity onPress={this.onExamplePress.bind(this, CollapsingHeaderWithScroll)}>
           <Text style={styles.button}>Collapsing Header with Scroll</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={this.onExamplePress.bind(this,  ViewWithInterceptionBlocker)}>
+              <Text style={styles.button}>View wrapped with InterceptionBlocker</Text>
         </TouchableOpacity>
       </ScrollView>
     );

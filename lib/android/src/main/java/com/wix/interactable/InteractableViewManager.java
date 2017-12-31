@@ -23,7 +23,6 @@ public class InteractableViewManager extends ViewGroupManager<InteractableView> 
     public static final int COMMAND_SNAP_TO = 2;
     public static final int COMMAND_CHANGE_POSITION = 3;
 
-
     @Override
     public String getName() {
         return REACT_CLASS;

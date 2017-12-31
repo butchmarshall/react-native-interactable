@@ -59,10 +59,13 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
 
     private InteractionListener listener;
 
+
+    private InterceptionBlocker interceptionBlocker;
+    private boolean isDelegatingTouch = false;
+
     private int mTouchSlop;
     private boolean isChildIsScrollContainer = false;
     private boolean skippedOneInterception;
-
 
     public InteractableView(Context context) {
         super(context);
@@ -96,6 +99,7 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
     public void setEventListener(InteractionListener listener) {
         this.listener = listener;
     }
+
 
     @Override
     public void onAnimatorPause() {
@@ -166,6 +170,8 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
         this.isSwiping = false;
         this.isChildIsScrollContainer = false;
         this.skippedOneInterception=false;
+
+        this.isDelegatingTouch = false;
     }
 
     @Override
@@ -176,6 +182,7 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
         // initiate the dragStartLocation and flags
         if (actionMasked == MotionEvent.ACTION_DOWN) {
             this.dragStartLocation = new PointF(ev.getX(),ev.getY());
+
             resetTouchEventFlags();
 
             // detect whether we targeted scrollable child, if so we will not intercapte the touch
@@ -194,31 +201,46 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
 
             float delX = ev.getX() - dragStartLocation.x;
             float delY = ev.getY() - dragStartLocation.y;
+
+            Log.d("InteractableView","onInterceptTouchEvent delY = " + delY);
+            Log.d("InteractableView","onInterceptTouchEvent curY = " + getTranslationY());
+
             boolean isHSwipe = Math.abs(delX) > mTouchSlop;
             boolean isVSwipe = Math.abs(delY) > mTouchSlop;
 
             this.isSwiping = this.isSwiping || isHSwipe || isVSwipe;
 
-           if (!isChildIsScrollContainer && dragEnabled && (horizontalOnly && isHSwipe ||
-                    verticalOnly && isVSwipe ||
-                    !horizontalOnly && !verticalOnly)) {
-
-               // we are giving opportunity intercept the action to the ChildrenViews
-               if(!skippedOneInterception){
-                   skippedOneInterception=true;
-               }
-               else{
-                   startDrag(ev);
-                   return true;
-               }
+            if (!isChildIsScrollContainer && dragEnabled &&
+                    (horizontalOnly && isHSwipe ||
+                     verticalOnly && isVSwipe ||
+                    (!horizontalOnly && !verticalOnly && this.isSwiping))) {
+ 
+                // we are giving opportunity intercept the action to the nested ChildrenViews
+                if(!skippedOneInterception){
+                    skippedOneInterception=true;
+                }
+                else{
+                    this.dragStartLocation = new PointF(ev.getX(),ev.getY());
+                    startDrag(ev);
+                    if (interceptionBlocker == null) {
+                        getReactRoot().onChildStartedNativeGesture(ev);
+                    }
+                    return true;
+                }
             }
         }
+
         return super.onInterceptTouchEvent(ev);
     }
 
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        interceptionBlocker = (InterceptionBlocker) findViewWithTag(InterceptionBlocker.TAG);
+    }
 
+    @Override
+    public boolean shouldDelayChildPressedState() {
+        return false;
     }
 
 
@@ -229,14 +251,25 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        handleTouch(event);
         getParent().requestDisallowInterceptTouchEvent(true);
-        return true;
+        return handleTouch(event);
     }
 
-    private void handleTouch(MotionEvent event) {
-        Log.d("InteractableView","handleTouch action = " + event.getAction());
-        switch (event.getAction()) {
+    @Override
+    public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+        super.requestDisallowInterceptTouchEvent(disallowIntercept);
+    }
+
+
+
+    private boolean handleTouch(MotionEvent event) {
+
+       // decides whether delegate the event or handle it - WIP
+      /* if(delegateEvent(event)){
+            return true;
+        }*/
+
+        switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 // for case when there are non-touchable children views
                 if(dragEnabled){
@@ -246,6 +279,7 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
             case MotionEvent.ACTION_MOVE:
                 float newX = getTranslationX() + event.getX() - dragStartLocation.x;
                 float newY = getTranslationY() + event.getY() - dragStartLocation.y;
+
                 if (horizontalOnly) {
                     newY = 0;
                 }
@@ -263,6 +297,7 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
 
         }
         this.dragLastLocation = new PointF(event.getX(),event.getY());
+        return true;
     }
 
     private ReactRootView getReactRoot() {
@@ -278,9 +313,59 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
         return null;
     }
 
+
+
+
+
+/*
+    private boolean isAtTopBound() {
+        if (this.boundaries == null) {
+            return false;
+        }
+        return getTranslationY() <= this.boundaries.getTop();
+    }
+
+    private void delegateEventToBlocker(MotionEvent event) {
+        if (!isDelegatingTouch){
+            event.setAction(MotionEvent.ACTION_DOWN);
+            this.animator.setDragging(false);
+            isSwiping = false;
+            isDelegatingTouch = true;
+        }
+        touchBlocker.dispatchTouchEvent(event);
+    }
+
+    private boolean delegateEvent(MotionEvent event){
+        float delX = event.getX() - dragStartLocation.x;
+        float delY = event.getY() - dragStartLocation.y;
+
+        Log.d("InteractableView","handleTouch action = " + event.getAction() +
+                " curY = " + getTranslationY() +
+                " delY = " + delY + " isDelegatingTouch = " + isDelegatingTouch);
+
+        if (isAtTopBound() && touchBlocker != null
+                && (delY < 0 || !touchBlocker.isAtTop())) {
+            Log.d("InteractableView","has blocker! y " + touchBlocker.getTop());
+
+            delegateEventToBlocker(event);
+
+            return true;
+        }
+
+        if (isDelegatingTouch) {
+            isDelegatingTouch = false;
+            startDrag(event);
+            this.dragStartLocation = new PointF(event.getX(),event.getY());
+        }
+        return false;
+    }*/
+
+
     private void startDrag(MotionEvent ev) {
         PointF currentPosition = getCurrentPosition();
+
         listener.onDrag("start",currentPosition.x, currentPosition.y, "");
+
         this.dragStartLocation = new PointF(ev.getX(),ev.getY());
         this.animator.removeTempBehaviors();
         this.animator.setDragging(true);
@@ -297,6 +382,7 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
         this.dragBehavior = null;
 
         this.animator.setDragging(false);
+        isSwiping = false;
 
         PointF velocity = this.animator.getTargetVelocity(this);
         if (this.horizontalOnly) velocity.y = 0;
@@ -304,23 +390,27 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
         float toss = 0.1f;
         if (this.dragWithSprings != null) toss = this.dragWithSprings.toss;
 
-        PointF currentPosition = getCurrentPosition();
-
         PointF projectedCenter = new PointF(getTranslationX() + toss*velocity.x,
                 getTranslationY() + toss*velocity.y);
 
         InteractablePoint snapPoint = InteractablePoint.findClosestPoint(snapPoints,projectedCenter);
-        listener.onDrag("end",currentPosition.x, currentPosition.y, snapPoint.id);
 
         addTempSnapToPointBehavior(snapPoint, false);
         addTempBounceBehaviorWithBoundaries(this.boundaries);
+
+        PointF currentPosition = getCurrentPosition();
+        listener.onDrag("end",currentPosition.x, currentPosition.y);
     }
 
     private void addTempSnapToPointBehavior(InteractablePoint snapPoint, boolean programmatic) {
         if (snapPoint == null) {
             return;
         }
+
         listener.onSnap(snapPoints.indexOf(snapPoint), snapPoint.id, programmatic);
+
+        Log.d("InteractableView","onSnap!!! snapPoint.id = " + snapPoint.id);
+
         PhysicsSpringBehavior snapBehavior = new PhysicsSpringBehavior(this,snapPoint.positionWithOrigin());
         snapBehavior.tension = snapPoint.tension;
 
@@ -348,6 +438,15 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
             if (boundaries.getBottom() != Float.MAX_VALUE) maxPoint.y = boundaries.getBottom();
 
             PhysicsBounceBehavior bounceBehavior = new PhysicsBounceBehavior(this,minPoint, maxPoint, boundaries.getBounce(), boundaries.isHaptic());
+//            bounceBehavior.setBounceListener(new PhysicsBounceBehavior.BounceListener() {
+//                @Override
+//                public void onBounceLimitTop(float vy) {
+//                    Log.d("InteractableView","onBounceLimitTop!!! vy = " + vy);
+//                    if (!isSwiping && !isDelegatingTouch) {
+//                        touchBlocker.animateScrollFling(-vy);
+//                    }
+//                }
+//            });
             this.animator.addTempBehavior(bounceBehavior);
 //            this.animator.addBehavior(bounceBehavior);
         }
@@ -531,6 +630,7 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
             this.animator.removeTempBehaviors();
             this.dragBehavior = null;
             InteractablePoint snapPoint = snapPoints.get(index);
+
             addTempSnapToPointBehavior(snapPoint, true);
             addTempBounceBehaviorWithBoundaries(this.boundaries);
         }
@@ -543,11 +643,11 @@ public class InteractableView extends ViewGroup implements PhysicsAnimator.Physi
         handleEndOfDrag();
     }
 
-
     public interface InteractionListener {
         void onSnap(int indexOfSnapPoint, String snapPointId, boolean programmatic);
         void onAlert(String alertAreaId, String alertType);
         void onAnimatedEvent(float x, float y);
+
         void onDrag(String state, float x, float y, String targetSnapPointId);
         void onStop(float x, float y);
     }
